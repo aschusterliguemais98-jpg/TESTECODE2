@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "title": "Afterlight",
+  "description": "Uma caminhada contemplativa por um prado suspenso sobre um mar de nuvens.",
+  "defaultCaptions": {
+    "x": "Afterlight — uma caminhada contemplativa entre vento, memória e nuvens.",
+    "facebook": "Afterlight — uma caminhada contemplativa entre vento, memória e nuvens.",
+    "reddit": "Afterlight — explore um prado suspenso sobre um mar de nuvens.",
+    "discord": "Afterlight — uma experiência contemplativa em primeira pessoa."
+  },
+  "assets": {
+    "og": "assets/share/afterlight-og.png",
+    "favicon": "assets/share/afterlight-favicon.png"
+  }
+}

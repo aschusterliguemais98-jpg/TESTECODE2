@@ -1,0 +1,28 @@
+AFTERLIGHT — COMO ABRIR O PROJETO
+
+REQUISITOS
+- Node.js 22 ou mais recente
+- pnpm
+- Conexão com a internet apenas para instalar as dependências na primeira vez
+
+EXECUÇÃO
+1. Extraia a pasta afterlight do arquivo ZIP.
+2. Abra um terminal dentro da pasta afterlight.
+3. Instale as dependências: pnpm install --frozen-lockfile
+4. Inicie o jogo: pnpm dev
+5. Abra no navegador o endereço indicado pelo Vite (normalmente http://localhost:3000).
+
+COMANDOS ÚTEIS
+- pnpm test    — testes automatizados
+- pnpm build   — build estático de produção em dist/
+- pnpm smoke   — fluxo de jogo em navegador desktop e celular, incluindo as três missões
+
+CONTROLES
+- WASD / analógico esquerdo: caminhar
+- Mouse / analógico direito: olhar
+- Shift: correr
+- Espaço: saltar
+- E / toque: interagir
+- Esc: pausar
+
+O progresso é local ao navegador; não é necessário login ou servidor de jogo.
