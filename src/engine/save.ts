@@ -1,4 +1,6 @@
 import { emptyMissionProgress, sanitizeMissionProgress, type MissionProgress } from '../game/missions'
+import { emptyDesertQuest, sanitizeDesertQuest, type DesertQuestProgress } from '../game/desert-quest'
+import type { MapId } from '../game/map-gateway'
 
 export type Locale = 'pt-BR'
 export type Quality = 'low' | 'medium' | 'high'
@@ -18,6 +20,8 @@ export type SaveData = {
   awake: boolean
   name: string
   missions: MissionProgress
+  map: MapId
+  desertQuest: DesertQuestProgress
 }
 
 export const SAVE_KEY = 'afterlight.save'
@@ -28,7 +32,7 @@ export function cleanName(raw: string): string {
 }
 
 export function defaultSave(): SaveData {
-  return { version: 1, locale: 'pt-BR', musicVolume: 0.7, sfxVolume: 0.8, muted: false, sensitivity: 1, invertY: false, quality: 'high', reducedMotion: false, stars: [], fox: 0, awake: false, name: '', missions: emptyMissionProgress() }
+  return { version: 1, locale: 'pt-BR', musicVolume: 0.7, sfxVolume: 0.8, muted: false, sensitivity: 1, invertY: false, quality: 'high', reducedMotion: false, stars: [], fox: 0, awake: false, name: '', missions: emptyMissionProgress(), map: 'meadow', desertQuest: emptyDesertQuest() }
 }
 const clamp01 = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback
 export function parseSave(raw: string | null): SaveData {
@@ -48,6 +52,8 @@ export function parseSave(raw: string | null): SaveData {
     stars: Array.isArray(data.stars) ? [...new Set(data.stars.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 16))].slice(0, 16) : [],
     fox: typeof data.fox === 'number' && Number.isFinite(data.fox) ? Math.max(0, Math.min(3, Math.floor(data.fox))) : 0, awake: data.awake === true, name: typeof data.name === 'string' ? cleanName(data.name) : '',
     missions: sanitizeMissionProgress(data.missions),
+    map: data.map === 'desert' ? 'desert' : 'meadow',
+    desertQuest: sanitizeDesertQuest(data.desertQuest),
   }
 }
 export class SaveStore {

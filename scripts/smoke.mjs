@@ -85,6 +85,55 @@ async function interactWith(page, id) {
   await page.evaluate(() => window.__game.ui.closeTalk())
 }
 
+async function interactWithWorldTarget(page, kind, id = '') {
+  const route = await page.evaluate(({ kind, id }) => {
+    const game = window.__game.game
+    let target
+    let expectedId
+    if (kind === 'gateway') {
+      const entering = game.mapId === 'meadow'
+      target = entering ? game.gateway.meadowPoint : game.gateway.desertPoint
+      expectedId = entering ? 'gateway:enter' : 'gateway:return'
+    } else if (kind === 'suri') {
+      target = game.desert.focusPoint
+      expectedId = 'npc:suri'
+    } else {
+      const object = game.desert.group.getObjectByName(`desert-object-${id}`)
+      if (!object) throw new Error(`missing desert echo ${id}`)
+      target = { x: object.position.x, y: object.position.y + 0.72, z: object.position.z }
+      expectedId = `echo:${id}`
+    }
+    const step = 2.5
+    const centerX = game.mapId === 'desert' ? 250 : 0
+    const candidates = [
+      { x: target.x, z: target.z + step }, { x: target.x, z: target.z - step },
+      { x: target.x + step, z: target.z }, { x: target.x - step, z: target.z },
+    ].sort((a, b) => Math.hypot(a.x - centerX, a.z) - Math.hypot(b.x - centerX, b.z))
+    const approach = candidates[0]
+    game.player.teleport({ x: approach.x, y: 0, z: approach.z }, Math.atan2(-(target.x - approach.x), -(target.z - approach.z)), 0)
+    return { expectedId, target: { x: target.x, y: target.y, z: target.z } }
+  }, { kind, id })
+  await frames(page, 5)
+  await page.evaluate(({ target }) => {
+    const game = window.__game.game
+    const dx = target.x - game.camera.position.x
+    const dy = target.y - game.camera.position.y
+    const dz = target.z - game.camera.position.z
+    game.player.yaw = Math.atan2(-dx, -dz)
+    game.player.pitch = Math.atan2(dy, Math.hypot(dx, dz))
+  }, route)
+  await frames(page, 3)
+  const focus = await page.evaluate(({ kind }) => {
+    const game = window.__game.game
+    return kind === 'gateway' ? game.gateway.focus?.id ?? null : game.desert.focus?.id ?? null
+  }, { kind })
+  if (focus !== route.expectedId) throw new Error(`world interaction focus missing: expected ${route.expectedId}, got ${focus}`)
+  await page.keyboard.press('E')
+  await page.waitForSelector('.talk.is-active')
+  await page.evaluate(() => window.__game.ui.closeTalk())
+  await frames(page, 3)
+}
+
 try {
   await waitForServer()
   browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }).catch(() => chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--ignore-gpu-blocklist', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }))
@@ -115,6 +164,58 @@ try {
   await page.screenshot({ path: `${out}/03-pause.png` })
   await page.keyboard.press('Escape')
   await page.waitForSelector('section[data-screen="hud"].is-active')
+
+  // Exercise both gateways, desert mission/save restoration, and storm shelter feedback.
+  await interactWithWorldTarget(page, 'gateway')
+  let desertState = await page.evaluate(() => ({
+    map: window.__game.game.mapId,
+    visible: window.__game.game.desert.group.visible,
+    storedMap: JSON.parse(localStorage.getItem('afterlight.save') ?? '{}').map,
+    region: document.querySelector('.mission-region')?.textContent,
+  }))
+  if (desertState.map !== 'desert' || !desertState.visible || desertState.storedMap !== 'desert' || desertState.region !== 'Dunas do Eco') throw new Error(`meadow-to-desert gateway failed: ${JSON.stringify(desertState)}`)
+  await page.screenshot({ path: `${out}/desert-01-entry.png` })
+  const strongStorm = await page.evaluate(() => {
+    const game = window.__game.game
+    for (let i = 0; i < 360; i += 1) game.desert.update(0.1, game.camera, game.player.feet, game.wind, true, false)
+    return { storm: game.desert.view.stormIntensity, visible: game.desert.sandstorm.group.visible, hud: document.querySelector('.storm-status')?.textContent }
+  })
+  if (strongStorm.storm < 0.7 || !strongStorm.visible || !strongStorm.hud?.includes('intensa')) throw new Error(`sandstorm did not reach the visible strong state: ${JSON.stringify(strongStorm)}`)
+  await page.evaluate(() => {
+    const game = window.__game.game
+    const shelter = game.desert.shelters[0]
+    game.player.teleport({ x: shelter.x, y: 0, z: shelter.z }, 0, 0)
+  })
+  await frames(page, 4)
+  const shelterState = await page.evaluate(() => ({
+    sheltered: window.__game.game.desert.view.sheltered,
+    status: document.querySelector('.storm-status')?.textContent,
+  }))
+  if (!shelterState.sheltered || !shelterState.status?.includes('Abrigo')) throw new Error(`stone shelter did not reduce and announce the storm: ${JSON.stringify(shelterState)}`)
+
+  await interactWithWorldTarget(page, 'suri')
+  if (!(await page.evaluate(() => window.__game.game.desert.questProgress.accepted))) throw new Error('Suri did not start the desert quest')
+  await interactWithWorldTarget(page, 'echo', 'compass-echo-1')
+  desertState = await page.evaluate(() => ({
+    collected: window.__game.game.desert.questProgress.collected,
+    saved: JSON.parse(localStorage.getItem('afterlight.save') ?? '{}').desertQuest?.collected,
+  }))
+  if (!desertState.collected.includes('compass-echo-1') || !desertState.saved?.includes('compass-echo-1')) throw new Error('desert objective was not persisted')
+  await page.reload()
+  await page.waitForSelector('section[data-screen="title"].is-active', { timeout: 120000 })
+  desertState = await page.evaluate(() => ({ map: window.__game.game.mapId, quest: window.__game.game.desert.questProgress }))
+  if (desertState.map !== 'desert' || !desertState.quest.accepted || !desertState.quest.collected.includes('compass-echo-1')) throw new Error('desert map and quest did not survive reload')
+  await page.click('section[data-screen="title"] [data-action="play"]')
+  await page.waitForSelector('section[data-screen="hud"].is-active')
+  await interactWithWorldTarget(page, 'echo', 'compass-echo-2')
+  await interactWithWorldTarget(page, 'echo', 'compass-echo-3')
+  await interactWithWorldTarget(page, 'suri')
+  desertState = await page.evaluate(() => ({ completed: window.__game.game.desert.questProgress.completed, altar: window.__game.game.desert.group.getObjectByName('desert-quest-altar')?.visible }))
+  if (!desertState.completed || !desertState.altar) throw new Error('the three-echo desert quest did not complete')
+  await page.screenshot({ path: `${out}/desert-02-complete.png` })
+  await interactWithWorldTarget(page, 'gateway')
+  desertState = await page.evaluate(() => ({ map: window.__game.game.mapId, desertVisible: window.__game.game.desert.group.visible, saved: JSON.parse(localStorage.getItem('afterlight.save') ?? '{}').map }))
+  if (desertState.map !== 'meadow' || desertState.desertVisible || desertState.saved !== 'meadow') throw new Error(`desert-to-meadow gateway failed: ${JSON.stringify(desertState)}`)
 
   // Exercise all three quest loops and nine pickups in the real production Preview.
   await interactWith(page, 'npc:nimbo')
@@ -164,11 +265,26 @@ try {
   await phonePage.waitForSelector('section[data-screen="hud"].is-active')
   if (!(await phonePage.locator('.touch-jump').isVisible())) throw new Error('touch controls are not visible')
   if (!(await phonePage.locator('.mission-card').isVisible())) throw new Error('mission journal is not visible on mobile')
+  const mobileHints = await phonePage.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect()
+      return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null
+    }
+    const hint = box('.hint')
+    const overlaps = ['.mission-card', '.touch-sprint', '.touch-jump', '.touch-talk', '.hud-pause']
+      .filter(selector => {
+        const other = box(selector)
+        return hint && other && hint.left < other.right && hint.right > other.left && hint.top < other.bottom && hint.bottom > other.top
+      })
+    return { text: document.querySelector('.hint')?.textContent ?? '', overlaps }
+  })
+  if (!mobileHints.text.includes('Arraste à esquerda') || !mobileHints.text.includes('Arraste à direita')) throw new Error('touch control instructions are missing on mobile')
+  if (mobileHints.overlaps.length) throw new Error(`touch hints overlap mobile controls: ${mobileHints.overlaps.join(', ')}`)
   await phonePage.screenshot({ path: `${out}/06-phone.png` })
   await phone.close()
 
   if (errors.length) throw new Error(`console errors:\n${errors.join('\n')}`)
-  console.log(`smoke: OK — desktop/mobile, 3 NPCs, all 3 quests, 9 collectibles, returns/unlocks and save/reload; screenshots in ${out}/`)
+  console.log(`smoke: OK — desktop/mobile, both maps and gateways, desert quest/save reload, storm/shelter, 3 meadow NPCs, all 3 meadow quests and 9 collectibles; screenshots in ${out}/`)
 } catch (error) {
   console.error(`smoke: FAIL — ${error?.message ?? String(error)}`)
   process.exitCode = 1

@@ -3,6 +3,7 @@ import type { I18n } from '../engine/i18n'
 import type { Input } from '../engine/input'
 import { cleanName, type Locale, type Quality, type SaveData, type SaveStore } from '../engine/save'
 import type { Caption } from '../game/game'
+import type { DesertHudView } from '../game/desert'
 import { STARS, personalize, type Line, type StarId } from '../game/story'
 import type { MissionHudView } from '../game/missions'
 type RoomStatus = 'idle' | 'connecting' | 'online' | 'offline' | 'full'
@@ -297,6 +298,25 @@ export class Ui {
           ? this.i18n.t('mission.status.return', { name: giver })
           : this.i18n.t('mission.status.active', { n: view.count, total: view.total, item })
     this.q('.mission-status').textContent = status
+    this.q<HTMLElement>('.storm-status').hidden = true
+  }
+
+  setDesertView(view: DesertHudView): void {
+    this.q('.mission-region').textContent = this.i18n.t('region.desert')
+    this.q('.mission-title').textContent = this.i18n.t(view.completed ? 'mission.desert.complete' : 'mission.desert.title')
+    const statusKey = view.completed
+      ? 'mission.desert.status.complete'
+      : !view.accepted
+        ? 'mission.desert.status.available'
+        : view.count >= view.total
+          ? 'mission.desert.status.return'
+          : 'mission.desert.status.active'
+    this.q('.mission-status').textContent = this.i18n.t(statusKey, { n: view.count, total: view.total })
+    const storm = this.q<HTMLElement>('.storm-status')
+    storm.hidden = view.stormIntensity < 0.3 && !view.sheltered
+    storm.dataset.sheltered = String(view.sheltered)
+    const stormKey = view.sheltered ? 'storm.sheltered' : view.stormIntensity >= 0.68 ? 'storm.strong' : 'storm.rising'
+    storm.textContent = this.i18n.t(stormKey)
   }
 
   private renderHint(): void {
@@ -593,7 +613,7 @@ export class Ui {
   <div class="like-toast" aria-live="polite"><i class="like-heart" aria-hidden="true">${HEART}<s>${HEART}</s><s>${HEART}</s><s>${HEART}</s></i><div class="like-text"><b></b><span></span></div><i class="like-arrow" aria-hidden="true" hidden></i></div>
   <div class="presence" hidden aria-live="polite"><i aria-hidden="true"></i><span></span><b class="presence-likes" hidden>${HEART}<em>0</em></b></div>
   <div class="stars" role="img">${STARS.map(id => `<i data-star="${id}"></i>`).join('')}</div>
-  <aside class="mission-card" aria-live="polite"><span class="mission-region"></span><strong class="mission-title"></strong><span class="mission-status"></span></aside>
+  <aside class="mission-card" aria-live="polite"><span class="mission-region"></span><strong class="mission-title"></strong><span class="mission-status"></span><span class="storm-status" hidden></span></aside>
   <div class="prompt"><kbd>E</kbd><span></span></div>
   <div class="talk" data-action="talk" role="dialog" aria-live="polite"><div class="talk-name"></div><p class="talk-text"></p><i class="talk-next" aria-hidden="true"></i></div>
   <button class="hud-pause" data-action="pause" data-i18n-label="touch.pause"><i></i><i></i></button>

@@ -5,6 +5,7 @@ import { Input } from './engine/input'
 import { GameLoop } from './engine/loop'
 import { SAVE_KEY, SaveStore, type SaveData } from './engine/save'
 import type { Game } from './game/game'
+import type { Line } from './game/story'
 import { tuning } from './game/tuning'
 import { TouchControls } from './ui/touch'
 import { Ui } from './ui/ui'
@@ -78,6 +79,17 @@ async function boot(): Promise<void> {
   expansion.onView = view => ui.setMissionView(view)
   expansion.restore(save.data.missions)
   ui.setMissionView(expansion.view)
+  game.desert.onPersist = desertQuest => save.update({ desertQuest })
+  game.desert.onCollect = () => audio.play('star')
+  game.desert.onView = view => { if (game?.mapId === 'desert') ui.setDesertView(view) }
+  game.desert.restore(save.data.desertQuest)
+  game.onMapChange = map => {
+    save.update({ map })
+    if (map === 'desert') ui.setDesertView(game!.desert.view)
+    else ui.setMissionView(expansion.view)
+  }
+  game.setMap(save.data.map)
+  if (game.mapId === 'desert') ui.setDesertView(game.desert.view)
   game.ambience.start()
   if (import.meta.env.DEV) { const { registerGameTuning } = await import('../scripts/manus-tuning/adapter.js'); await registerGameTuning(tuning) }
   const activeGame = game
@@ -98,12 +110,24 @@ async function boot(): Promise<void> {
       if (activeGame.mode === 'playing' && !activeGame.debugCamera) {
         if (ui.talking) { if (input.consume('interact') || input.consume('jump') || input.consume('confirm')) ui.advanceTalk() }
         else if (input.consume('interact')) {
-          const expanded = !!activeGame.expansion.focus
-          const lines = expanded ? activeGame.expansion.interact() : encounters.interact(i18n.locale)
-          if (lines) { audio.play('talk'); ui.openTalk(lines, () => expanded ? activeGame.expansion.endDialogue() : encounters.endDialogue()) }
+          let lines: Line[] | null = null
+          let finish = () => encounters.endDialogue()
+          if (activeGame.gateway.focus) {
+            lines = activeGame.gateway.interact(key => i18n.t(key))
+            finish = () => activeGame.gateway.endDialogue()
+          } else if (activeGame.desert.focus) {
+            lines = activeGame.desert.interact((key, vars) => i18n.t(key, vars))
+            finish = () => activeGame.desert.endDialogue()
+          } else if (activeGame.expansion.focus) {
+            lines = activeGame.expansion.interact()
+            finish = () => activeGame.expansion.endDialogue()
+          } else {
+            lines = encounters.interact(i18n.locale)
+          }
+          if (lines) { audio.play('talk'); ui.openTalk(lines, finish) }
         }
       } else input.consume('interact')
-      ui.setFocus(activeGame.mode === 'playing' && !ui.talking ? (activeGame.expansion.focus?.target ?? encounters.focus?.target ?? null) : null)
+      ui.setFocus(activeGame.mode === 'playing' && !ui.talking ? (activeGame.gateway.focus?.target ?? activeGame.desert.focus?.target ?? activeGame.expansion.focus?.target ?? encounters.focus?.target ?? null) : null)
       ui.frame(seconds); activeGame.render(alpha, seconds); input.endFrame(); frames += 1
     },
   })

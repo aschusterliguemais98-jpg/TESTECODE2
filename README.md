@@ -1,32 +1,8 @@
-# TESTECODE2
+# Afterlight
 
-## Afterlight
+**Afterlight** é uma experiência contemplativa 3D em primeira pessoa: caminhe por um prado acima das nuvens, descubra criaturas e memórias, e acorde o guardião silencioso no alto da colina.
 
-**Afterlight** é uma experiência contemplativa 3D em primeira pessoa: caminhe por um prado acima das nuvens, encontre criaturas e memórias e desperte o guardião no alto da colina. Esta versão expande a exploração com três regiões, três personagens e uma campanha de missões encadeadas.
-
-### Conteúdo
-
-- **Nimbo, Tavi e Orla:** três novos personagens com falas em português brasileiro.
-- **Três missões em sequência:** nove objetos exploráveis, acompanhamento de progresso na HUD, retorno aos personagens e marcos de recompensa.
-- **Mapa ampliado:** Prado dos Brotos, Varanda dos Sinos e Mirante das Nuvens, conectados ao cenário original.
-- A campanha original das dez estrelas permanece independente. O progresso é local ao navegador; não é necessário login nem servidor de jogo.
-
-### Baixar o projeto completo
-
-[Baixar `afterlight-completo.zip`](./afterlight-completo.zip). O arquivo inclui o código-fonte, assets, configurações, build e instruções rápidas em `COMO-ABRIR.txt`.
-
-### Executar a partir do código-fonte
-
-Requisitos: Node.js 22 ou mais recente e pnpm.
-
-```bash
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-O Vite informa o endereço local. Para os comandos de testes, build e smoke test, consulte `COMO-ABRIR.txt` e `README.md`.
-
-### Controles
+## Controles
 
 - **WASD / analógico esquerdo:** caminhar
 - **Mouse / analógico direito:** olhar
@@ -35,6 +11,33 @@ O Vite informa o endereço local. Para os comandos de testes, build e smoke test
 - **E / toque:** interagir
 - **Esc:** pausar
 
-### Créditos
+O jogo é uma experiência estática e solo. Todo o progresso e as preferências ficam apenas no navegador; não é necessário login nem serviço de jogo online.
 
-O material de referência **Faraway** é o ponto de partida do jogo. Créditos e avisos das bibliotecas e fontes permanecem nos arquivos de licença incluídos no repositório.
+## Exploração ampliada
+
+- Três personagens locais: Nimbo, Tavi e Orla, encontrados em novas áreas da colina.
+- Três missões encadeadas, com nove objetos para descobrir, diálogos, recompensas visuais e acompanhamento na HUD.
+- Prado, varanda e mirante conectados por terreno caminhável; as dez estrelas e a história original continuam independentes das missões.
+- O progresso das missões é salvo localmente e continua funcionando sem serviços online.
+
+## Segundo mapa — Dunas do Eco
+
+- Um bioma de areia independente, conectado ao prado por portais de ida e volta, com relevo e limites próprios.
+- Três marcos — Arco Afundado, Oásis Silencioso e Coluna do Vento — e Suri, que inicia a busca por três ecos de bússola.
+- Uma tempestade cíclica de areia, com partículas e névoa; abrigos de pedra reduzem a intensidade local.
+- A HUD indica o objetivo e a tempestade; o último mapa e o progresso dos ecos são salvos localmente.
+
+## Desenvolvimento
+
+```bash
+pnpm dev
+pnpm test
+pnpm build
+pnpm smoke
+```
+
+`pnpm smoke` exercita no navegador o prado, os portais nos dois sentidos, a missão desértica, o salvamento e recarregamento, a tempestade/abrigo, as três missões do prado e o layout mobile. O Preview usa `HOST=0.0.0.0` e `PORT=3000`. `pnpm build` valida TypeScript e produz `dist/`.
+
+## Créditos e licenças
+
+O projeto integra o material de referência Faraway como ponto de partida. A fonte visual e os créditos das bibliotecas permanecem descritos nos avisos de fonte em `public/fonts/`; Three.js é MIT e Rapier é Apache-2.0. A marca, interface e apresentação desta versão usam o título **Afterlight**.

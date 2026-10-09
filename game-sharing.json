@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
   "title": "Afterlight",
-  "description": "Uma caminhada contemplativa por um prado suspenso sobre um mar de nuvens.",
+  "description": "Uma caminhada contemplativa em dois mundos: do prado suspenso sobre as nuvens às Dunas do Eco sob a tempestade de areia.",
   "defaultCaptions": {
-    "x": "Afterlight — uma caminhada contemplativa entre vento, memória e nuvens.",
-    "facebook": "Afterlight — uma caminhada contemplativa entre vento, memória e nuvens.",
-    "reddit": "Afterlight — explore um prado suspenso sobre um mar de nuvens.",
-    "discord": "Afterlight — uma experiência contemplativa em primeira pessoa."
+    "x": "Afterlight — explore dois mundos entre vento, memória, nuvens e areia.",
+    "facebook": "Afterlight — uma caminhada contemplativa do prado às Dunas do Eco.",
+    "reddit": "Afterlight — atravesse um prado suspenso e enfrente uma tempestade de areia com abrigos de pedra.",
+    "discord": "Afterlight — uma experiência contemplativa em primeira pessoa com dois mapas conectados."
   },
   "assets": {
     "og": "assets/share/afterlight-og.png",

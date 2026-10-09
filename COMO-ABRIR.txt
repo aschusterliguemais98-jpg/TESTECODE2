@@ -15,14 +15,14 @@ EXECUÇÃO
 COMANDOS ÚTEIS
 - pnpm test    — testes automatizados
 - pnpm build   — build estático de produção em dist/
-- pnpm smoke   — fluxo de jogo em navegador desktop e celular, incluindo as três missões
+- pnpm smoke   — prado e Dunas do Eco no navegador desktop/celular, portais, missão do deserto, save/reload, tempestade/abrigo e as três missões do prado
 
 CONTROLES
 - WASD / analógico esquerdo: caminhar
 - Mouse / analógico direito: olhar
 - Shift: correr
 - Espaço: saltar
-- E / toque: interagir
+- E / toque: interagir com personagens, ecos e portais
 - Esc: pausar
 
 O progresso é local ao navegador; não é necessário login ou servidor de jogo.

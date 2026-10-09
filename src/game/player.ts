@@ -5,6 +5,14 @@ import { CONFIG } from './config'
 import { terrainHeight } from './terrain'
 import { tuning } from './tuning'
 
+export type WalkableSurface = {
+  centerX: number
+  centerZ: number
+  softRadius: number
+  hardRadius: number
+  heightAt: (x: number, z: number) => number
+}
+
 /**
  * First-person walker: a capsule driven by Rapier's kinematic character controller (slopes,
  * steps, snapping to the turf), smoothed acceleration, coyote-time jumps, gentle head bob and a
@@ -32,12 +40,16 @@ export class Player {
   private sprintBlend = 0
   private airTime = 0
   private readonly move = new THREE.Vector3()
+  private readonly mapCenter = new THREE.Vector2()
+  private heightAt: (x: number, z: number) => number = terrainHeight
+  private softRadius = CONFIG.player.softRadius
+  private hardRadius = CONFIG.player.hardRadius
 
   constructor(physics: Physics, spawn: THREE.Vector3, yaw: number, pitch: number) {
     const P = CONFIG.player
     this.yaw = yaw
     this.pitch = pitch
-    const y = terrainHeight(spawn.x, spawn.z) + P.halfHeight + P.radius + 0.05
+    const y = this.heightAt(spawn.x, spawn.z) + P.halfHeight + P.radius + 0.05
     this.body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(spawn.x, y, spawn.z))
     this.collider = physics.world.createCollider(RAPIER.ColliderDesc.capsule(P.halfHeight, P.radius).setFriction(0), this.body)
     this.kcc = physics.world.createCharacterController(0.02)
@@ -54,14 +66,34 @@ export class Player {
 
   teleport(p: THREE.Vector3, yaw: number, pitch: number): void {
     const P = CONFIG.player
-    const y = terrainHeight(p.x, p.z) + P.halfHeight + P.radius + 0.05
+    const y = this.heightAt(p.x, p.z) + P.halfHeight + P.radius + 0.05
     this.body.setTranslation({ x: p.x, y, z: p.z }, true)
     this.body.setNextKinematicTranslation({ x: p.x, y, z: p.z })
     this.cur.set(p.x, y, p.z)
     this.prev.copy(this.cur)
     this.velocity.set(0, 0, 0)
+    this.feet.set(p.x, this.heightAt(p.x, p.z), p.z)
+    this.grounded = true
+    this.coyote = 0
+    this.jumpBuffer = 0
+    this.airTime = 0
+    this.bobAmp = 0
+    this.sprintBlend = 0
     this.yaw = yaw
     this.pitch = pitch
+  }
+
+  /** Change the ground sampler and local play boundary before teleporting between maps. */
+  setSurface(surface: WalkableSurface): void {
+    if (!Number.isFinite(surface.centerX) || !Number.isFinite(surface.centerZ) ||
+      !Number.isFinite(surface.softRadius) || !Number.isFinite(surface.hardRadius) ||
+      surface.softRadius <= 0 || surface.hardRadius <= surface.softRadius || typeof surface.heightAt !== 'function') {
+      throw new Error('Invalid walkable map surface')
+    }
+    this.mapCenter.set(surface.centerX, surface.centerZ)
+    this.softRadius = surface.softRadius
+    this.hardRadius = surface.hardRadius
+    this.heightAt = surface.heightAt
   }
 
   /** Mouse / stick look, applied every rendered frame. */
@@ -87,11 +119,13 @@ export class Player {
     this.velocity.x += (wantX - this.velocity.x) * k
     this.velocity.z += (wantZ - this.velocity.z) * k
     // Soft boundary: the wind leans on you, then a firm edge above the cloud sea.
-    const r = Math.hypot(this.cur.x, this.cur.z)
-    if (r > P.softRadius) {
-      const push = Math.min(1, (r - P.softRadius) / (P.hardRadius - P.softRadius))
-      this.velocity.x -= (this.cur.x / r) * push * 14 * dt
-      this.velocity.z -= (this.cur.z / r) * push * 14 * dt
+    const dx = this.cur.x - this.mapCenter.x
+    const dz = this.cur.z - this.mapCenter.y
+    const r = Math.hypot(dx, dz)
+    if (r > this.softRadius) {
+      const push = Math.min(1, (r - this.softRadius) / (this.hardRadius - this.softRadius))
+      this.velocity.x -= (dx / r) * push * 14 * dt
+      this.velocity.z -= (dz / r) * push * 14 * dt
     }
     // Standing still comes to a clean stop (the easing above never quite reaches zero).
     if (idle && this.grounded && Math.hypot(this.velocity.x, this.velocity.z) < 0.15) {
@@ -122,14 +156,16 @@ export class Player {
       idle && wasGrounded && this.grounded && this.velocity.x === 0 && this.velocity.z === 0 && this.velocity.y <= 0 && Math.abs(m.x) + Math.abs(m.y) + Math.abs(m.z) < 0.003
     let nx = planted ? this.cur.x : this.cur.x + m.x
     let nz = planted ? this.cur.z : this.cur.z + m.z
-    const nr = Math.hypot(nx, nz)
-    if (nr > P.hardRadius) {
-      nx *= P.hardRadius / nr
-      nz *= P.hardRadius / nr
+    const ndx = nx - this.mapCenter.x
+    const ndz = nz - this.mapCenter.y
+    const nr = Math.hypot(ndx, ndz)
+    if (nr > this.hardRadius) {
+      nx = this.mapCenter.x + ndx * this.hardRadius / nr
+      nz = this.mapCenter.y + ndz * this.hardRadius / nr
     }
     this.cur.set(nx, planted ? this.cur.y : this.cur.y + m.y, nz)
     // Safety net: never fall through the turf.
-    const floor = terrainHeight(nx, nz) + P.halfHeight + P.radius - 0.05
+    const floor = this.heightAt(nx, nz) + P.halfHeight + P.radius - 0.05
     if (this.cur.y < floor) {
       this.cur.y = floor
       this.velocity.y = Math.max(0, this.velocity.y)

@@ -20,6 +20,8 @@ import { Ruin } from './ruin'
 import { Terrain, terrainHeight } from './terrain'
 import { Trample, type Walker } from './trample'
 import { Wind } from './wind'
+import { DesertMap, DESERT_HARD_RADIUS, DESERT_ORIGIN, DESERT_SOFT_RADIUS, DESERT_SPAWN, desertGroundHeight } from './desert'
+import { MapGateway, MEADOW_GATE_POSITION, type MapId } from './map-gateway'
 
 export type Mode = 'title' | 'playing' | 'paused'
 
@@ -60,6 +62,8 @@ export class Game {
   readonly critter: Critter
   readonly encounters: Encounters
   readonly expansion: Expansion
+  readonly desert: DesertMap
+  readonly gateway: MapGateway
   readonly flyers: Flyers
   readonly drift: Drift
   /** Set while an overlay (the drawing pad) owns input: the traveller stands still. */
@@ -67,11 +71,15 @@ export class Game {
   readonly player: Player
   readonly ambience: Ambience
   onCaption?: (caption: Caption) => void
+  onMapChange?: (map: MapId) => void
   private readonly sun: THREE.DirectionalLight
   private readonly fluteAt = new THREE.Vector3()
   private readonly seen = new Set<Caption>()
   private playTime = 0
   private time = 0
+  mapId: MapId = 'meadow'
+  private readonly meadowFogColor = new THREE.Color(0.5, 0.6, 0.9)
+  private readonly desertFogColor = new THREE.Color(0x9b7556)
 
   constructor(private readonly renderer: Renderer, readonly input: Input, readonly audio: Audio, quality: Quality) {
     const preset = QUALITY[quality]
@@ -111,7 +119,12 @@ export class Game {
     this.expansion.onSound = name => this.audio.play(name)
     this.expansion.onCollect = () => this.audio.play('star')
     this.scene.add(this.expansion.group)
-    this.rocks = new Rocks(this.physics, [...this.encounters.reserved, ...this.expansion.reserved])
+    this.desert = new DesertMap(this.physics)
+    this.desert.group.visible = false
+    this.scene.add(this.desert.group)
+    this.gateway = new MapGateway((x, z) => this.desert.groundHeight(x, z))
+    this.scene.add(this.gateway.group)
+    this.rocks = new Rocks(this.physics, [...this.encounters.reserved, ...this.expansion.reserved, ...this.gateway.reserved])
     this.scene.add(this.rocks.group)
     this.critter = new Critter(this.physics, this.ruin.anchors.critter, new THREE.Vector3(0, 0, 0))
     this.scene.add(this.critter.group)
@@ -120,6 +133,7 @@ export class Game {
       ...this.rocks.grassMask,
       ...this.encounters.grassMask,
       ...this.expansion.grassMask,
+      ...this.gateway.reserved,
       { x: this.ruin.anchors.critter.x, z: this.ruin.anchors.critter.z, r: 0.45 },
     ])
     this.grass = new Grass(this.terrain, preset.grass, this.pipeline.multisampled, this.trample.uniforms)
@@ -136,6 +150,7 @@ export class Game {
     this.ambience = new Ambience(audio)
     this.player.onStep = sprinting => this.ambience.footstep(sprinting)
     this.player.onLand = impact => this.ambience.land(impact)
+    this.gateway.onTravel = map => this.setMap(map)
     // The guardian hums from its hollow joints, a little below the red band on its arm.
     this.fluteAt.copy(this.ruin.anchors.bandCenter).lerp(new THREE.Vector3(0, terrainHeight(0, 0), 0), 0.3)
     this.setTitleCamera(0)
@@ -154,15 +169,40 @@ export class Game {
     this.sun.shadow.map = null
   }
 
+  /** Change the active world while keeping one camera, player, physics world and local save. */
+  setMap(map: MapId): void {
+    if (map === this.mapId) return
+    if (map === 'desert') {
+      this.player.setSurface({ centerX: DESERT_ORIGIN.x, centerZ: DESERT_ORIGIN.z, softRadius: DESERT_SOFT_RADIUS, hardRadius: DESERT_HARD_RADIUS, heightAt: desertGroundHeight })
+      this.mapId = 'desert'
+      this.desert.group.visible = true
+      this.gateway.setMap(map)
+      this.player.teleport(DESERT_SPAWN, 2.08, 0.08)
+    } else {
+      this.player.setSurface({ centerX: 0, centerZ: 0, softRadius: CONFIG.player.softRadius, hardRadius: CONFIG.player.hardRadius, heightAt: terrainHeight })
+      this.mapId = 'meadow'
+      this.desert.group.visible = false
+      this.gateway.setMap(map)
+      this.player.teleport(new THREE.Vector3(MEADOW_GATE_POSITION.x - 4, 0, MEADOW_GATE_POSITION.z), Math.PI / 2, 0.08)
+    }
+    this.expansion.focus = null
+    this.encounters.focus = null
+    this.desert.focus = null
+    this.onMapChange?.(map)
+  }
+
   /** Enter first-person play from the title (or restart at the spawn point). */
   start(): void {
     const P = CONFIG.player
-    this.player.teleport(P.spawn, P.spawnYaw, P.spawnPitch)
+    if (this.mapId === 'desert') this.player.teleport(DESERT_SPAWN, 2.08, 0.08)
+    else this.player.teleport(P.spawn, P.spawnYaw, P.spawnPitch)
     this.mode = 'playing'
     this.seen.clear()
     this.playTime = 0
     this.expansion.endDialogue()
     this.encounters.endDialogue()
+    this.desert.endDialogue()
+    this.gateway.endDialogue()
     this.ambience.start()
   }
 
@@ -179,6 +219,7 @@ export class Game {
   }
 
   private discover(): void {
+    if (this.mapId !== 'meadow') return
     const f = this.player.feet
     const r = Math.hypot(f.x, f.z)
     const c = this.ruin.anchors.critter
@@ -211,7 +252,7 @@ export class Game {
   }
 
   step(dt: number): void {
-    if (this.mode === 'playing' && !this.debugCamera) this.player.step(dt, this.encounters.talking || this.expansion.talking || this.frozen ? STILL : this.input)
+    if (this.mode === 'playing' && !this.debugCamera) this.player.step(dt, this.encounters.talking || this.expansion.talking || this.desert.talking || this.gateway.talking || this.frozen ? STILL : this.input)
     this.ribbon.step(dt, this.wind)
     this.physics.step(dt)
   }
@@ -220,7 +261,7 @@ export class Game {
   private pressGrass(dt: number): void {
     const list = this.walkers
     list.length = 0
-    if (this.mode !== 'title' && !this.debugCamera) {
+    if (this.mode !== 'title' && !this.debugCamera && this.mapId === 'meadow') {
       const f = this.player.feet
       const dx = f.x - this.lastFeet.x
       const dz = f.z - this.lastFeet.y
@@ -272,14 +313,32 @@ export class Game {
     const playing = this.mode === 'playing' && !this.debugCamera
     if (playing) this.playTime += dt
     this.encounters.update(dt, this.time, this.camera, this.player.feet, playing, this.wind.gust)
-    this.expansion.update(dt, this.time, this.camera, this.player.feet, playing, this.wind.gust)
+    if (this.mapId === 'meadow') {
+      this.expansion.update(dt, this.time, this.camera, this.player.feet, playing, this.wind.gust)
+    } else {
+      this.expansion.focus = null
+      this.encounters.focus = null
+    }
+    this.gateway.update(this.camera, this.mapId, playing)
+    this.desert.update(dt, this.camera, this.player.feet, this.wind, playing && this.mapId === 'desert', this.reducedMotion)
+    const fog = this.scene.fog as THREE.FogExp2
+    if (this.mapId === 'desert') {
+      const strength = Math.min(1, dt * 0.8)
+      fog.color.lerp(this.desertFogColor, strength)
+      const targetDensity = 0.0055 + this.desert.view.stormIntensity * 0.008
+      fog.density += (targetDensity - fog.density) * Math.min(1, dt * 1.1)
+    } else {
+      fog.color.lerp(this.meadowFogColor, Math.min(1, dt * 0.8))
+      fog.density += (0.0032 - fog.density) * Math.min(1, dt * 1.1)
+    }
     this.flyers.update(this.time)
     this.drift.update(dt, this.wind, this.camera.position)
     this.ambience.update(dt, this.wind, this.camera.position, this.fluteAt, this.ribbon.tip, this.mode !== 'title')
     if (this.mode === 'playing' && !this.debugCamera) this.discover()
     // The shadow frustum follows the camera (halfway toward the summit, so the ruin always casts).
     const c = this.camera.position
-    this.sun.target.position.set(c.x * 0.5, 0, c.z * 0.5)
+    if (this.mapId === 'desert') this.sun.target.position.set(c.x, 0, c.z)
+    else this.sun.target.position.set(c.x * 0.5, 0, c.z * 0.5)
     this.sun.position.copy(this.sun.target.position).addScaledVector(CONFIG.sunDir, 160)
     this.pipeline.render(this.scene, this.camera)
     this.renderer.adapt(frameSeconds)

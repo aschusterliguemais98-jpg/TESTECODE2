@@ -452,6 +452,7 @@ body[data-input='touch'] .reticle {
   gap: 8px;
   width: max-content;
   max-width: 92vw;
+  pointer-events: none;
   transform: translate(-50%, 8px);
   opacity: 0;
   transition: opacity 1.2s var(--ease), transform 1.2s var(--ease);
@@ -525,6 +526,26 @@ body[data-input='touch'] .note-key {
   font-size: 13px;
   letter-spacing: 0.08em;
   white-space: pre;
+}
+body[data-input='touch'] .hint {
+  left: calc(12px + var(--safe-l));
+  bottom: calc(126px + var(--safe-b));
+  width: min(220px, 60vw);
+  max-width: none;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  transform: translateY(8px);
+}
+body[data-input='touch'] .hint.is-active {
+  transform: translateY(0);
+}
+body[data-input='touch'] .hint span {
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 .caption {
   position: absolute;
@@ -988,6 +1009,19 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
   font-size: 12px;
   line-height: 1.45;
 }
+.storm-status {
+  color: #f2c27e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+.storm-status::before {
+  content: '◆';
+  margin-right: 6px;
+  font-size: 8px;
+}
+.storm-status[data-sheltered='true'] { color: #a7d9d4; }
 body[data-talking] .mission-card {
   opacity: 0.46;
 }
@@ -1000,6 +1034,7 @@ body[data-talking] .mission-card {
   }
   .mission-title { font-size: 12px; }
   .mission-status { font-size: 10px; }
+  .storm-status { font-size: 9px; }
 }
 
 .prompt {

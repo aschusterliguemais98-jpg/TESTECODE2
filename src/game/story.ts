@@ -7,7 +7,7 @@ import type { Locale } from '../engine/save'
  */
 
 /** '' = narration (no name shown). */
-export type Speaker = '' | 'fox' | 'rose' | 'sheep' | 'tapir' | 'shoebill' | 'nimbo' | 'tavi' | 'orla' | 'you'
+export type Speaker = '' | 'fox' | 'rose' | 'sheep' | 'tapir' | 'shoebill' | 'nimbo' | 'tavi' | 'orla' | 'suri' | 'you'
 export type Line = readonly [Speaker, string]
 export type Target = 'plane' | 'hat' | 'sprout' | 'fox' | 'rose' | 'sheep' | 'box' | 'tapir' | 'shoebill' | 'guardian'
 export type StarId = Target
